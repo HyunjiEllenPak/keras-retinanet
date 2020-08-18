@@ -18,6 +18,27 @@ import keras
 from . import backend
 
 
+
+def smooth_batch_labels(batch_labels, factor=0.1):
+    """
+        Args:
+            batch_labels: array of shape [B, A, C+1]
+                B: batch size, A: anchor count, C: class count
+            factor: factor to smooth by
+
+    """
+    # remove anchor state
+    labels = batch_labels[:, :, :-1]
+    # compute smoothed labels and replace
+    batch_labels[:, :, :-1] = smooth_labels(labels, factor)
+
+    return batch_labels
+
+def smooth_labels(labels, factor=0.1):
+    labels *= (1 - factor)
+    labels += (factor / labels.shape[2])
+    return labels
+
 def focal(alpha=0.25, gamma=2.0, cutoff=0.5):
     """ Create a functor for computing the focal loss.
 

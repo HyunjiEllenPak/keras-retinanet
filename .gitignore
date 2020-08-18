@@ -21,3 +21,8 @@ __pycache__/
 .coverage.*
 coverage.xml
 *.cover
+
+#personal
+/.github/
+/.git/
+/.idea/

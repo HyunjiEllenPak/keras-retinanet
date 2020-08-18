@@ -34,6 +34,7 @@ from ..utils.image import (
     resize_image,
 )
 from ..utils.transform import transform_aabb
+from keras_retinanet.losses import smooth_batch_labels
 
 
 class Generator(keras.utils.Sequence):
@@ -54,7 +55,8 @@ class Generator(keras.utils.Sequence):
         compute_anchor_targets=anchor_targets_bbox,
         compute_shapes=guess_shapes,
         preprocess_image=preprocess_image,
-        config=None
+        config=None,
+        lb_factor=0
     ):
         """ Initialize Generator object.
 
@@ -84,7 +86,7 @@ class Generator(keras.utils.Sequence):
         self.compute_shapes                 = compute_shapes
         self.preprocess_image               = preprocess_image
         self.config                         = config
-
+        self.lb_factor = lb_factor
         # Define groups
         self.group_images()
 
@@ -361,6 +363,11 @@ class Generator(keras.utils.Sequence):
 
         # compute network targets
         targets = self.compute_targets(image_group, annotations_group)
+        batch_bboxes, batch_encoded_labels = targets
+        # apply label smoothing
+        batch_encoded_labels = smooth_batch_labels(batch_encoded_labels, factor=self.lb_factor)
+        # repackage bboxes and labels
+        targets = [batch_bboxes, batch_encoded_labels]
 
         return inputs, targets
 
