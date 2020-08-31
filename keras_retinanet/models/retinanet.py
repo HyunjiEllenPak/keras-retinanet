@@ -400,4 +400,4 @@ def retinanet_bbox(
     )([boxes, classification] + other)
 
     # construct the model
-    return keras.models.Model(inputs=model.inputs, outputs=detections, name=name)
+    return keras.models.Model(inputs=model.inputs, outputs=detections, name=name), anchors

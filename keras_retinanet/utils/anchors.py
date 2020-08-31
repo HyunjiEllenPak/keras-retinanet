@@ -115,7 +115,6 @@ def anchor_targets_bbox(
 
     return regression_batch, labels_batch
 
-
 def compute_gt_annotations(
     anchors,
     annotations,

@@ -118,12 +118,12 @@ def create_models(backbone_retinanet, num_classes, weights, multi_gpu=0,
         training_model = model
 
     # make prediction model
-    prediction_model = retinanet_bbox(model=model, anchor_params=anchor_params, pyramid_levels=pyramid_levels)
+    prediction_model, anchors = retinanet_bbox(model=model, anchor_params=anchor_params, pyramid_levels=pyramid_levels)
 
     # compile model
     training_model.compile(
         loss={
-            'regression'    : losses.smooth_l1(),
+            'regression'    : losses.diou_loss(model.inputs[0], anchors, True),
             'classification': losses.focal()
         },
         optimizer=keras.optimizers.adam(lr=lr, clipnorm=0.001)
@@ -133,7 +133,7 @@ def create_models(backbone_retinanet, num_classes, weights, multi_gpu=0,
 
 
 def create_callbacks(model, training_model, prediction_model, validation_generator, args):
-    """ Creates the callbacks to use during training.
+    """ Creates the callbacks to use during trlaining.
 
     Args
         model: The base model.
@@ -177,6 +177,9 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
     # save the model
     if args.snapshots:
         # ensure directory created first; otherwise h5py will error after epoch.
+        from keras.callbacks import EarlyStopping
+        es = EarlyStopping(monitor='val_loss', mode='min',patience=15)
+        callbacks.append(es)
         makedirs(args.snapshot_path)
         checkpoint = keras.callbacks.ModelCheckpoint(
             os.path.join(
@@ -185,8 +188,8 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
             ),
             verbose=1,
             # save_best_only=True,
-            # monitor="mAP",
-            # mode='max'
+            monitor="mAP",
+            mode='max'
         )
         checkpoint = RedirectModel(checkpoint, model)
         callbacks.append(checkpoint)
@@ -230,6 +233,7 @@ def create_generators(args, preprocess_image):
         'image_max_side'   : args.image_max_side,
         'no_resize'        : args.no_resize,
         'preprocess_image' : preprocess_image,
+        'lb_factor'        : args.lb_factor
     }
 
     # create random transform generator for augmenting training data
@@ -383,7 +387,6 @@ def check_args(parsed_args):
 
     return parsed_args
 
-
 def parse_args(args):
     """ Parse the arguments.
     """
@@ -463,8 +466,8 @@ def main(args=None):
     backbone = models.backbone(args.backbone)
 
     # make sure keras and tensorflow are the minimum required version
-    check_keras_version()
-    check_tf_version()
+    # check_keras_version()
+    # check_tf_version()
 
     # optionally choose specific GPU
     if args.gpu is not None:
@@ -489,7 +492,7 @@ def main(args=None):
         if args.config and 'pyramid_levels' in args.config:
             pyramid_levels = parse_pyramid_levels(args.config)
 
-        prediction_model = retinanet_bbox(model=model, anchor_params=anchor_params, pyramid_levels=pyramid_levels)
+        prediction_model, anchors = retinanet_bbox(model=model, anchor_params=anchor_params, pyramid_levels=pyramid_levels)
     else:
         weights = args.weights
         # default to imagenet if nothing else is specified
@@ -531,7 +534,7 @@ def main(args=None):
     # start training
     return training_model.fit_generator(
         generator=train_generator,
-        steps_per_epoch=args.steps,
+        steps_per_epoch=1,
         epochs=args.epochs,
         verbose=1,
         callbacks=callbacks,
@@ -539,6 +542,7 @@ def main(args=None):
         use_multiprocessing=args.multiprocessing,
         max_queue_size=args.max_queue_size,
         validation_data=validation_generator,
+        validation_steps=1,
         initial_epoch=args.initial_epoch
     )
 
